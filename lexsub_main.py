@@ -40,17 +40,16 @@ def smurf_predictor(context : Context) -> str:
     return 'smurf'
 
 def wn_frequency_predictor(context: Context) -> str:
-    # get lemmas of all possible synonyms
-    # (with duplication, for other senses)
-    synsets = wn.synsets(context.lemma, context.pos)
-    lemmas = [l for s in synsets for l in s.lemmas()]
-
     # count the occurances of each lemma in the corpus
     counts = defaultdict(int)
-    for lemma in lemmas:
-        counts[lemma.name()] += lemma.count()
+    for synset in wn.synsets(context.lemma, context.pos):
+        # this will hit same lemma multiple times
+        # if it belongs to multiple synsets
+        for lemma in synset.lemmas():
+            if lemma.name() != context.lemma:
+                counts[lemma.name()] += lemma.count()
 
-    return max(counts).replace('_', ' ')
+    return max(counts, key=counts.get).replace('_', ' ')
 
 def wn_simple_lesk_predictor(context : Context) -> str:
     return None #replace for part 3
