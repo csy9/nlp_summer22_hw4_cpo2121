@@ -9,8 +9,8 @@ class Context(object):
     """
     Represent a single input word with context.
     """
-    
-    def __init__(self, cid, word_form, lemma, pos, left_context, right_context): 
+
+    def __init__(self, cid, word_form, lemma, pos, left_context, right_context):
         self.cid = cid
         self.word_form = word_form
         self.lemma = lemma
@@ -40,12 +40,12 @@ class LexsubData(object):
         parts = lex_item.split('.')
         if len(parts) == 3:
             lemma, pos = parts[0], parts[2]
-        else: 
+        else:
             lemma, pos = parts[0], parts[1]
 
         for instance in lexelt:
             assert instance.tag=="instance"
-            context = instance.find("context")                     
+            context = instance.find("context")
             context_s = "".join([str(context.text)] + [codecs.decode(ET.tostring(e),"UTF-8") for e in context])
             word_form, left_context, right_context = self.process_context(context_s)
             yield Context(self.total_count, word_form, lemma, pos, left_context, right_context)
@@ -53,7 +53,7 @@ class LexsubData(object):
 
     def parse_et(self,et):
        assert et.tag == "corpus"
-       for lexelt in et: 
+       for lexelt in et:
             assert lexelt.tag == "lexelt"
             for annotation in self.parse_lexelt(lexelt):
                 yield annotation
@@ -68,7 +68,7 @@ def read_lexsub_xml(*sources):
         et = ET.parse(source_f)
         for annotation in lexsub_data.parse_et(et.getroot()):
             yield annotation
-    
+
 if __name__=="__main__":
 
     for context in read_lexsub_xml(sys.argv[1]):
