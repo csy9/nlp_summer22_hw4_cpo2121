@@ -200,6 +200,8 @@ class W2VLesk(object):
         Find the best synset using the extended lesk algorithm,
         then choose the best word in the synset by Word2Vec cosine similarity
         (instead of frequency as used in part 4)
+
+        Confusingly, this does worse than either lesk or w2v...
         """
         # ignore synsets where the target word is the only lemma
         synsets = [s for s in wn.synsets(context.lemma, context.pos)
@@ -231,6 +233,27 @@ class W2VLesk(object):
         return lemmas[np.argmax(dists)]
 
 
+class BertWithWord2Vec(object):
+    def __init__(self, w2vfile):
+        # Word2Vec model, for computing model similarities
+        self.w2v = gensim.models.KeyedVectors.load_word2vec_format(w2vfile, binary=True)
+        # bert model, for predicting appropriate replacement words
+        self.bert = transformers.TFDistilBertForMaskedLM
+                                 .from_pretrained('distilbert-base-uncased')
+        self.tokenizer = transformers.DistilBertTokenizer
+                                     .from_pretrained('distilbert-base-uncased')
+
+    def sim(self, x, y):
+        """ cosine similarity with error handling """
+        try:
+            return self.w2v.similarity(x, y)
+        except KeyError:
+            return 0
+
+    def predict(self, context):
+        return 'bright'
+
+
 if __name__ == "__main__":
     # At submission time, this program should run your best predictor (part 6).
 
@@ -241,7 +264,9 @@ if __name__ == "__main__":
 #     predictor = wn_simple_lesk_predictor
 #     predictor = Word2VecSubst(W2VMODEL_FILENAME).predict_nearest
 #     predictor = BertPredictor()
-    predictor = W2VLesk(W2VMODEL_FILENAME).predict
+#     predictor = W2VLesk(W2VMODEL_FILENAME).predict
+    model = BertWithWord2Vec(W2VMODEL_FILENAME)
+    predictor = model.predict
 
     for context in read_lexsub_xml(sys.argv[1]):
 # #         print(context)  # useful for debugging
