@@ -121,8 +121,13 @@ class Word2VecSubst(object):
     def __init__(self, filename):
         self.model = gensim.models.KeyedVectors.load_word2vec_format(filename, binary=True)
 
-    def predict_nearest(self,context : Context) -> str:
-        return None # replace for part 4
+    def predict_nearest(self, context: Context) -> str:
+        # get list of possible synonyms
+        syns = get_candidates(context.lemma, context.pos)
+        # compute cosine similarity between target word
+        dists = [model.similarity(context.lemma, w) for w in syns]
+        # return highest scoring word
+        return opts[np.argmax(dists)]
 
 
 class BertPredictor(object):
@@ -139,13 +144,13 @@ if __name__ == "__main__":
 
     # At submission time, this program should run your best predictor (part 6).
 
-    #W2VMODEL_FILENAME = 'GoogleNews-vectors-negative300.bin.gz'
-    #predictor = Word2VecSubst(W2VMODEL_FILENAME)
+    W2VMODEL_FILENAME = 'GoogleNews-vectors-negative300.bin.gz'
+    predictor = Word2VecSubst(W2VMODEL_FILENAME)
 
 #     nltk.download('stopwords')
 #     reader = read_lexsub_xml('lexsub_trial.xml')
 #     context = next(reader)
     for context in read_lexsub_xml(sys.argv[1]):
 #         print(context)  # useful for debugging
-        prediction = wn_simple_lesk_predictor(context)
+        prediction = predictor(context)
         print("{}.{} {} :: {}".format(context.lemma, context.pos, context.cid, prediction))
