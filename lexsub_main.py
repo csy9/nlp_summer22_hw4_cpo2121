@@ -125,7 +125,7 @@ class Word2VecSubst(object):
         # get list of possible synonyms
         syns = get_candidates(context.lemma, context.pos)
         # compute cosine similarity between target word
-        dists = [model.similarity(context.lemma, w) for w in syns]
+        dists = [self.model.similarity(context.lemma, w) for w in syns]
         # return highest scoring word
         return opts[np.argmax(dists)]
 
@@ -145,7 +145,7 @@ if __name__ == "__main__":
     # At submission time, this program should run your best predictor (part 6).
 
     W2VMODEL_FILENAME = 'GoogleNews-vectors-negative300.bin.gz'
-    predictor = Word2VecSubst(W2VMODEL_FILENAME)
+    predictor = Word2VecSubst(W2VMODEL_FILENAME).predict_nearest
 
 #     nltk.download('stopwords')
 #     reader = read_lexsub_xml('lexsub_trial.xml')
