@@ -132,9 +132,9 @@ class Word2VecSubst(object):
         # get list of possible synonyms
         syns = get_candidates(context.lemma, context.pos)
         # compute cosine similarity between target word
-        dists = [sim(context.lemma, w) for w in syns]
+        sims = [sim(context.lemma, w) for w in syns]
         # return highest scoring word
-        return syns[np.argmax(dists)]
+        return syns[np.argmax(sims)]
 
 
 class BertPredictor(object):
@@ -229,8 +229,8 @@ class W2VLesk(object):
         # return lemma in synset w/ highest cosine similarity to target word
         lemmas = [l.name() for l in best_syn.lemmas()
                   if l.name() != context.lemma]
-        dists = [self.sim(context.lemma, l) for l in lemmas]
-        return lemmas[np.argmax(dists)]
+        sims = [self.sim(context.lemma, l) for l in lemmas]
+        return lemmas[np.argmax(sims)]
 
 
 class BertWithWord2Vec(object):
@@ -238,9 +238,9 @@ class BertWithWord2Vec(object):
         # Word2Vec model, for computing model similarities
         self.w2v = gensim.models.KeyedVectors.load_word2vec_format(w2vfile, binary=True)
         # bert model, for predicting appropriate replacement words
-        self.bert = transformers.TFDistilBertForMaskedLM
-                                 .from_pretrained('distilbert-base-uncased')
-        self.tokenizer = transformers.DistilBertTokenizer
+        self.bert = transformers.TFDistilBertForMaskedLM \
+                                .from_pretrained('distilbert-base-uncased')
+        self.tokenizer = transformers.DistilBertTokenizer \
                                      .from_pretrained('distilbert-base-uncased')
 
     def sim(self, x, y):
@@ -251,7 +251,34 @@ class BertWithWord2Vec(object):
             return 0
 
     def predict(self, context):
-        return 'bright'
+        # get list of possible synonyms
+        syns = get_candidates(context.lemma, context.pos)
+
+        # vocab of the bert model, special tokens/chars removed
+        vocab = [w for w in self.tokenizer.get_vocab()
+                 if len(w) > 2 and '[' not in w and '#' not in w]
+
+        # words in bert's vocab that are more similar to the target word
+        # than the ones suggested by wordnet, according to w2v similarity
+        min_sim = max(self.sim(context.lemma, s) for s in syns)
+        bert_syns = [w for w in vocab
+                     if self.sim(context.lemma, w) > min_sim and context.lemma not in w]
+
+        # expanded set of replacement candidates
+        exp_syns = list(set(syns + bert_syns))
+
+        # convert context to masked + encoded representation
+        con = context.left_context + ['[MASK]'] + context.right_context
+        in_toks = self.tokenizer.encode(con)
+        pos = 1 + len(context.left_context) # encode adds [CLS] token
+
+        # get BERT predictions for the target word
+        pred = self.bert.predict(np.array([in_toks]), verbose=0)[0][0,pos]
+
+        # select highest scoring word in syns
+        syns_ids = self.tokenizer.encode(exp_syns)
+        syns_scores = pred[syns_ids[1:-1]] # don't grab [CLS] or [SEP]
+        return exp_syns[np.argmax(syns_scores)]
 
 
 if __name__ == "__main__":
@@ -265,10 +292,15 @@ if __name__ == "__main__":
 #     predictor = Word2VecSubst(W2VMODEL_FILENAME).predict_nearest
 #     predictor = BertPredictor()
 #     predictor = W2VLesk(W2VMODEL_FILENAME).predict
-    model = BertWithWord2Vec(W2VMODEL_FILENAME)
-    predictor = model.predict
+    predictor = BertWithWord2Vec(W2VMODEL_FILENAME).predict
 
-    for context in read_lexsub_xml(sys.argv[1]):
+    model = BertWithWord2Vec(W2VMODEL_FILENAME)
+    reader = read_lexsub_xml('lexsub_trial.xml')
+    context = next(reader)
+    while context.lemma != 'bar':
+        context = next(reader)
+
+#     for context in read_lexsub_xml(sys.argv[1]):
 # #         print(context)  # useful for debugging
-        prediction = predictor(context)
-        print("{}.{} {} :: {}".format(context.lemma, context.pos, context.cid, prediction))
+#         prediction = predictor(context)
+#         print("{}.{} {} :: {}".format(context.lemma, context.pos, context.cid, prediction))
