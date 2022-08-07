@@ -122,10 +122,17 @@ class Word2VecSubst(object):
         self.model = gensim.models.KeyedVectors.load_word2vec_format(filename, binary=True)
 
     def predict_nearest(self, context: Context) -> str:
+        # cosine similarity w/ error handling
+        def sim(x, y):
+            try:
+                return self.model.similarity(x, y)
+            except KeyError:
+                return 0
+
         # get list of possible synonyms
         syns = get_candidates(context.lemma, context.pos)
         # compute cosine similarity between target word
-        dists = [self.model.similarity(context.lemma, w) for w in syns]
+        dists = [sim(context.lemma, w) for w in syns]
         # return highest scoring word
         return syns[np.argmax(dists)]
 
