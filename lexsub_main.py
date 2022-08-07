@@ -160,16 +160,90 @@ class BertPredictor(object):
         return syns[np.argmax(syns_scores)]
 
 
+class W2VLesk(object):
+    def __init__(self, filename):
+        self.model = gensim.models.KeyedVectors.load_word2vec_format(filename, binary=True)
+
+    def compute_overlap(self, context_string, synset, bad_words):
+        """
+        compute overlap between context string and synset.
+        removes words in bad_words from definition lists.
+        """
+        # definition of synset
+        d = tokenize_and_remove(synset.definition(), bad_words)
+
+        # extend w/ examples of synset
+        for ex in synset.examples():
+            d += tokenize_and_remove(ex, bad_words)
+
+        # extend w/ hypernyms
+        for h in synset.hypernyms():
+            d += tokenize_and_remove(h.definition(), bad_words)
+            for ex in h.examples():
+                d += tokenize_and_remove(ex, bad_words)
+
+        # count overlap between def and context
+        # this approach double counts, i.e.
+        #     [a, b, b],    [b] -> 2
+        #     [a, b, b], [b, b] -> 4
+        return sum(1 for x in context_string for y in d if x == y)
+
+    def sim(self, x, y):
+        """ cosine similarity with error handling """
+        try:
+            return self.model.similarity(x, y)
+        except KeyError:
+            return 0
+
+    def predict(self, context):
+        """
+        Find the best synset using the extended lesk algorithm,
+        then choose the best word in the synset by Word2Vec cosine similarity
+        (instead of frequency as used in part 4)
+        """
+        # ignore synsets where the target word is the only lemma
+        synsets = [s for s in wn.synsets(context.lemma, context.pos)
+                   if len(s.lemmas()) > 1]
+
+        # full tokenized context string
+        sw = stopwords.words('english')
+        c = ' '.join(context.left_context + context.right_context)
+        c = tokenize_and_remove(c, sw)
+
+        # compute overlap scores
+        # (ignore stop words and the target word)
+        overlap = [self.compute_overlap(c, s, [context.lemma] + sw)
+                   for s in synsets]
+
+        # count number of times the target word appears in each sense
+        freq = [l.count() for s in synsets for l in s.lemmas()
+                if l.name() == context.lemma]
+
+        # select best synset.
+        # predominantly judge overlap, use freq as a tiebreaker
+        scores = [1000*x[0] + x[1] for x in zip(overlap, freq)]
+        best_syn = synsets[np.argmax(scores)]
+
+        # return lemma in synset w/ highest cosine similarity to target word
+        lemmas = [l.name() for l in best_syn.lemmas()
+                  if l.name() != context.lemma]
+        dists = [self.sim(context.lemma, l) for l in lemmas]
+        return lemmas[np.argmax(dists)]
+
 
 if __name__ == "__main__":
     # At submission time, this program should run your best predictor (part 6).
 
-#     W2VMODEL_FILENAME = 'GoogleNews-vectors-negative300.bin.gz'
-#     predictor = Word2VecSubst(W2VMODEL_FILENAME).predict_nearest
-    predictor = BertPredictor()
-
 #     nltk.download('stopwords')
+    W2VMODEL_FILENAME = 'GoogleNews-vectors-negative300.bin.gz'
+
+    # models
+#     predictor = wn_simple_lesk_predictor
+#     predictor = Word2VecSubst(W2VMODEL_FILENAME).predict_nearest
+#     predictor = BertPredictor()
+    predictor = W2VLesk(W2VMODEL_FILENAME).predict
+
     for context in read_lexsub_xml(sys.argv[1]):
 # #         print(context)  # useful for debugging
-        prediction = predictor.predict(context)
+        prediction = predictor(context)
         print("{}.{} {} :: {}".format(context.lemma, context.pos, context.cid, prediction))
