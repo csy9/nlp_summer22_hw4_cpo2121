@@ -142,22 +142,34 @@ class BertPredictor(object):
         self.tokenizer = transformers.DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
         self.model = transformers.TFDistilBertForMaskedLM.from_pretrained('distilbert-base-uncased')
 
-    def predict(self, context : Context) -> str:
-        return None # replace for part 5
+    def predict(self, context: Context) -> str:
+        # get list of possible synonyms
+        syns = get_candidates(context.lemma, context.pos)
+
+        # convert context to masked + encoded representation
+        con = context.left_context + ['[MASK]'] + context.right_context
+        in_toks = self.tokenizer.encode(con)
+        pos = 1 + len(context.left_context) # encode adds [CLS] token
+
+        # get BERT predictions for the target word
+        pred = self.model.predict(np.array([in_toks]), verbose=0)[0][0,pos]
+
+        # select highest scoring word in syns
+        syns_ids = self.tokenizer.encode(syns)
+        syns_scores = pred[syns_ids[1:-1]] # don't grab [CLS] or [SEP]
+        return syns[np.argmax(syns_scores)]
 
 
 
 if __name__ == "__main__":
-
     # At submission time, this program should run your best predictor (part 6).
 
-    W2VMODEL_FILENAME = 'GoogleNews-vectors-negative300.bin.gz'
-    predictor = Word2VecSubst(W2VMODEL_FILENAME).predict_nearest
+#     W2VMODEL_FILENAME = 'GoogleNews-vectors-negative300.bin.gz'
+#     predictor = Word2VecSubst(W2VMODEL_FILENAME).predict_nearest
+    predictor = BertPredictor()
 
 #     nltk.download('stopwords')
-#     reader = read_lexsub_xml('lexsub_trial.xml')
-#     context = next(reader)
     for context in read_lexsub_xml(sys.argv[1]):
-#         print(context)  # useful for debugging
-        prediction = predictor(context)
+# #         print(context)  # useful for debugging
+        prediction = predictor.predict(context)
         print("{}.{} {} :: {}".format(context.lemma, context.pos, context.cid, prediction))
