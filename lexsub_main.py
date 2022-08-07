@@ -127,7 +127,7 @@ class Word2VecSubst(object):
         # compute cosine similarity between target word
         dists = [self.model.similarity(context.lemma, w) for w in syns]
         # return highest scoring word
-        return opts[np.argmax(dists)]
+        return syns[np.argmax(dists)]
 
 
 class BertPredictor(object):
