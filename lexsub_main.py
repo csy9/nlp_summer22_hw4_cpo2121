@@ -43,7 +43,7 @@ def get_candidates(lemma, pos) -> List[str]:
     # get name of each lemmas in each synset
     w = [l.name() for s in synsets for l in s.lemmas()]
     # return list of distinct lemmas w/o '_' separation char
-    return list({x.replace('_', ' ') for x in w if x != lemma})
+    return list({x.replace('_', ' ').lower() for x in w if x != lemma})
 
 def smurf_predictor(context : Context) -> str:
     """
@@ -262,7 +262,8 @@ class BertWithWord2Vec(object):
         # than the ones suggested by wordnet, according to w2v similarity
         min_sim = max(self.sim(context.lemma, s) for s in syns)
         bert_syns = [w for w in vocab
-                     if self.sim(context.lemma, w) > min_sim and context.lemma not in w]
+                     if self.sim(context.lemma, w) > min_sim
+                     and wn.morphy(w) != context.lemma]
 
         # expanded set of replacement candidates
         exp_syns = list(set(syns + bert_syns))
@@ -294,13 +295,13 @@ if __name__ == "__main__":
 #     predictor = W2VLesk(W2VMODEL_FILENAME).predict
     predictor = BertWithWord2Vec(W2VMODEL_FILENAME).predict
 
-    model = BertWithWord2Vec(W2VMODEL_FILENAME)
-    reader = read_lexsub_xml('lexsub_trial.xml')
-    context = next(reader)
-    while context.lemma != 'bar':
-        context = next(reader)
+#     model = BertWithWord2Vec(W2VMODEL_FILENAME)
+#     reader = read_lexsub_xml('lexsub_trial.xml')
+#     context = next(reader)
+#     while context.lemma != 'bar':
+#         context = next(reader)
 
-#     for context in read_lexsub_xml(sys.argv[1]):
-# #         print(context)  # useful for debugging
-#         prediction = predictor(context)
-#         print("{}.{} {} :: {}".format(context.lemma, context.pos, context.cid, prediction))
+    for context in read_lexsub_xml(sys.argv[1]):
+#         print(context)  # useful for debugging
+        prediction = predictor(context)
+        print("{}.{} {} :: {}".format(context.lemma, context.pos, context.cid, prediction))
