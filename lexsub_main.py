@@ -162,6 +162,16 @@ class BertPredictor(object):
 
 
 class W2VLesk(object):
+    """
+    Part 6, model 1.
+    Find the best synset using the extended lesk algorithm,
+    then choose the best word in the synset by Word2Vec cosine similarity
+    (instead of frequency as used in part 4)
+
+    Surprisingly, this does worse than either lesk or w2v...
+    Perhaps the counts more accurately represent how likely a word is
+    to appear in a certain context.
+    """
     def __init__(self, filename):
         self.model = gensim.models.KeyedVectors.load_word2vec_format(filename, binary=True)
 
@@ -236,6 +246,7 @@ class W2VLesk(object):
 
 class BertWithWord2Vec(object):
     """
+    Part 6, model 2.
     Same concept as the BertPredictor, but expand the candidate pool using Word2Vec.
     Gets better results than BertPredictor for me, but worse than w2v alone.
     """
@@ -300,14 +311,17 @@ if __name__ == "__main__":
 #     nltk.download('stopwords')
     W2VMODEL_FILENAME = 'GoogleNews-vectors-negative300.bin.gz'
 
-    # models
+    # models from p1-p5
 #     predictor = wn_frequency_predictor
 #     predictor = wn_simple_lesk_predictor
     predictor = Word2VecSubst(W2VMODEL_FILENAME).predict_nearest
 #     predictor = BertPredictor().predict
+
+    # custom models from part 6
 #     predictor = W2VLesk(W2VMODEL_FILENAME).predict
 #     predictor = BertWithWord2Vec(W2VMODEL_FILENAME).predict
 
+    # useful for debugging
 #     model = BertPredictor()
 #     model = BertWithWord2Vec(W2VMODEL_FILENAME)
 #     reader = read_lexsub_xml('lexsub_trial.xml')
