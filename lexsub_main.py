@@ -147,12 +147,13 @@ class BertPredictor(object):
         syns = get_candidates(context.lemma, context.pos)
 
         # convert context to masked + encoded representation
-        con = context.left_context + ['[MASK]'] + context.right_context
-        in_toks = self.tokenizer.encode(con)
-        pos = 1 + len(context.left_context) # encode adds [CLS] token
+        con = [w.lower() for w in context.left_context] \
+               + ['[MASK]'] + [w.lower() for w in context.right_context]
+        enc = self.tokenizer.encode(con, return_tensors='tf')
+        pos = 1 + len(context.left_context) # encode adds [CLS] token to start
 
         # get BERT predictions for the target word
-        pred = self.model.predict(np.array([in_toks]), verbose=0)[0][0,pos]
+        pred = self.model.predict(enc, verbose=0)[0][0,pos]
 
         # select highest scoring word in syns
         syns_ids = self.tokenizer.encode(syns)
@@ -234,6 +235,10 @@ class W2VLesk(object):
 
 
 class BertWithWord2Vec(object):
+    """
+    Same concept as the BertPredictor, but expand the candidate pool using Word2Vec.
+    Gets better results than BertPredictor for me, but worse than w2v alone.
+    """
     def __init__(self, w2vfile):
         # Word2Vec model, for computing model similarities
         self.w2v = gensim.models.KeyedVectors.load_word2vec_format(w2vfile, binary=True)
@@ -242,6 +247,10 @@ class BertWithWord2Vec(object):
                                 .from_pretrained('distilbert-base-uncased')
         self.tokenizer = transformers.DistilBertTokenizer \
                                      .from_pretrained('distilbert-base-uncased')
+        # vocab of the bert model, special tokens/chars removed
+        sw = stopwords.words('english')
+        self.vocab = [w for w in self.tokenizer.get_vocab() \
+                      if len(w) > 2 and '[' not in w and '#' not in w and w not in sw]
 
     def sim(self, x, y):
         """ cosine similarity with error handling """
@@ -254,27 +263,30 @@ class BertWithWord2Vec(object):
         # get list of possible synonyms
         syns = get_candidates(context.lemma, context.pos)
 
-        # vocab of the bert model, special tokens/chars removed
-        vocab = [w for w in self.tokenizer.get_vocab()
-                 if len(w) > 2 and '[' not in w and '#' not in w]
-
         # words in bert's vocab that are more similar to the target word
         # than the ones suggested by wordnet, according to w2v similarity
+        # (use max(min_sim, 0.35) to avoid pulling in erroneous words)
         min_sim = max(self.sim(context.lemma, s) for s in syns)
-        bert_syns = [w for w in vocab
-                     if self.sim(context.lemma, w) > min_sim
-                     and wn.morphy(w) != context.lemma]
+        bert_syns = [wn.morphy(w, context.pos) for w in self.vocab
+                     if wn.morphy(w, context.pos)
+                     and self.sim(context.lemma, w) > max(min_sim, 0.35)
+                     and wn.morphy(w, context.pos) != context.lemma]
 
         # expanded set of replacement candidates
         exp_syns = list(set(syns + bert_syns))
+        if len(exp_syns) > 512:
+            print('exp_syns len: ', len(exp_syns))
+            print(context)
+            print(exp_syns[0:300])
 
         # convert context to masked + encoded representation
-        con = context.left_context + ['[MASK]'] + context.right_context
-        in_toks = self.tokenizer.encode(con)
+        con = [w.lower() for w in context.left_context] \
+               + ['[MASK]'] + [w.lower() for w in context.right_context]
+        enc = self.tokenizer.encode(con, return_tensors='tf')
         pos = 1 + len(context.left_context) # encode adds [CLS] token
 
         # get BERT predictions for the target word
-        pred = self.bert.predict(np.array([in_toks]), verbose=0)[0][0,pos]
+        pred = self.bert.predict(enc, verbose=0)[0][0,pos]
 
         # select highest scoring word in syns
         syns_ids = self.tokenizer.encode(exp_syns)
@@ -289,16 +301,18 @@ if __name__ == "__main__":
     W2VMODEL_FILENAME = 'GoogleNews-vectors-negative300.bin.gz'
 
     # models
+#     predictor = wn_frequency_predictor
 #     predictor = wn_simple_lesk_predictor
-#     predictor = Word2VecSubst(W2VMODEL_FILENAME).predict_nearest
-#     predictor = BertPredictor()
+    predictor = Word2VecSubst(W2VMODEL_FILENAME).predict_nearest
+#     predictor = BertPredictor().predict
 #     predictor = W2VLesk(W2VMODEL_FILENAME).predict
-    predictor = BertWithWord2Vec(W2VMODEL_FILENAME).predict
+#     predictor = BertWithWord2Vec(W2VMODEL_FILENAME).predict
 
+#     model = BertPredictor()
 #     model = BertWithWord2Vec(W2VMODEL_FILENAME)
 #     reader = read_lexsub_xml('lexsub_trial.xml')
 #     context = next(reader)
-#     while context.lemma != 'bar':
+#     while context.lemma != 'can':
 #         context = next(reader)
 
     for context in read_lexsub_xml(sys.argv[1]):
